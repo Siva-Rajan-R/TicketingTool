@@ -30,22 +30,31 @@ def _make_key(prefix: str, params: Any) -> str:
 
 
 async def cache_get(redis: Redis, key: str) -> Any | None:
-    raw = await redis.get(key)
-    if raw is None:
+    try:
+        raw = await redis.get(key)
+        if raw is None:
+            return None
+        return json.loads(raw)
+    except Exception:
         return None
-    return json.loads(raw)
 
 
 async def cache_set(redis: Redis, key: str, value: Any, ttl: int) -> None:
-    await redis.setex(key, ttl, json.dumps(value, default=str))
+    try:
+        await redis.setex(key, ttl, json.dumps(value, default=str))
+    except Exception:
+        pass
 
 
 async def invalidate_tickets(redis: Redis) -> None:
     """Delete all ticket-related cache keys."""
-    for pattern in _TICKET_PATTERNS:
-        keys = await redis.keys(pattern)
-        if keys:
-            await redis.delete(*keys)
+    try:
+        for pattern in _TICKET_PATTERNS:
+            keys = await redis.keys(pattern)
+            if keys:
+                await redis.delete(*keys)
+    except Exception:
+        pass
 
 
 def ticket_list_key(params: dict) -> str:

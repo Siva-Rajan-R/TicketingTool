@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, update, delete, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -53,7 +53,6 @@ async def mark_read(
     )
     notif = result.scalar_one_or_none()
     if not notif:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Notification not found")
 
     notif.read = True

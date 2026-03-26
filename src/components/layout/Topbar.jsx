@@ -6,13 +6,11 @@ import { useUiStore } from '../../stores/uiStore'
 import { timeAgo } from '../../utils/ticketUtils'
 
 export function Topbar() {
-  const { notifications, markAllRead, unreadCount } = useNotificationStore()
+  const { notifications, markAllRead, unreadCount: unread } = useNotificationStore()
   const { setFilter } = useTicketStore()
   const { isDark, toggleTheme } = useUiStore()
   const [notifOpen, setNotifOpen] = useState(false)
   const [searchVal, setSearchVal] = useState('')
-
-  const unread = unreadCount()
 
   const handleSearch = (val) => {
     setSearchVal(val)

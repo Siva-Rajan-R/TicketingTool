@@ -4,6 +4,8 @@ SSE endpoint — GET /events
 The client connects with a Bearer token in the Authorization header
 (or via query param ?token=... for EventSource which can't set headers).
 """
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 
@@ -32,8 +34,7 @@ async def sse_stream(
     except ValueError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
-    import uuid as _uuid
-    result = await db.execute(select(User).where(User.id == _uuid.UUID(user_id)))
+    result = await db.execute(select(User).where(User.id == uuid.UUID(user_id)))
     user = result.scalar_one_or_none()
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")

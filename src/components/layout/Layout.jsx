@@ -1,11 +1,64 @@
+import { useEffect, useRef } from 'react'
 import { Outlet, Navigate } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { Topbar } from './Topbar'
 import { ToastContainer } from '../ui/Toast'
 import { useUserStore } from '../../stores/userStore'
+import { useTicketStore } from '../../stores/ticketStore'
+import { useAdminStore } from '../../stores/adminStore'
+import { useNotificationStore } from '../../stores/notificationStore'
 
 export function Layout() {
-  const { isLoggedIn } = useUserStore()
+  const { isLoggedIn, token } = useUserStore()
+  const { fetchTickets } = useTicketStore()
+  const { fetchAgents, fetchSla, fetchEmailConfig } = useAdminStore()
+  const { fetchNotifications, addNotification } = useNotificationStore()
+  const sseRef = useRef(null)
+
+  useEffect(() => {
+    if (!isLoggedIn || !token) return
+
+    // Load all data on mount
+    fetchTickets()
+    fetchAgents()
+    fetchSla()
+    fetchEmailConfig()
+    fetchNotifications()
+
+    // Open SSE connection
+    const es = new EventSource(`/api/events?token=${encodeURIComponent(token)}`)
+    sseRef.current = es
+
+    const handleTicketEvent = () => {
+      fetchTickets()
+      fetchNotifications()
+    }
+
+    es.addEventListener('ticket_created',      handleTicketEvent)
+    es.addEventListener('ticket_updated',      handleTicketEvent)
+    es.addEventListener('ticket_deleted',      handleTicketEvent)
+    es.addEventListener('tickets_bulk_updated', handleTicketEvent)
+    es.addEventListener('ticket_comment',      handleTicketEvent)
+
+    es.addEventListener('notification', (e) => {
+      try {
+        const payload = JSON.parse(e.data)
+        addNotification(payload.text || 'New notification', payload.type || 'info')
+      } catch {
+        // ignore malformed SSE data
+      }
+    })
+
+    es.onerror = () => {
+      // SSE will auto-reconnect; no action needed
+    }
+
+    return () => {
+      es.close()
+      sseRef.current = null
+    }
+  }, [isLoggedIn, token]) // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!isLoggedIn) return <Navigate to="/login" replace />
 
   return (

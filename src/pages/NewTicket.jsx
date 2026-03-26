@@ -11,8 +11,6 @@ import { CATEGORIES, PRIORITIES } from '../utils/ticketUtils'
 
 const EMPTY = { company: '', contactName: '', email: '', phone: '', subject: '', category: 'software', priority: 'medium', description: '', asset: '' }
 
-const SLA_LABELS = { critical: '1 hour', high: '4 hours', medium: '8 hours', low: '24 hours' }
-
 const PRIORITY_UI = {
   critical: { border: 'border-rose-500/40',   text: 'text-rose-600 dark:text-rose-400',   bg: 'bg-rose-500/10',   ring: 'ring-rose-500/50' },
   high:     { border: 'border-orange-500/40', text: 'text-orange-600 dark:text-orange-400', bg: 'bg-orange-500/10', ring: 'ring-orange-500/50' },
@@ -51,10 +49,15 @@ export default function NewTicket() {
     const errs = validate()
     if (Object.keys(errs).length) { setErrors(errs); return }
     setSubmitting(true)
-    await new Promise(r => setTimeout(r, 400))
-    addTicket({ ...form, status: 'open', assignee: 'unassigned', submitter: form.contactName })
-    addToast('Ticket submitted successfully!', 'success')
-    navigate('/tickets/mine')
+    try {
+      await addTicket(form)
+      addToast('Ticket submitted successfully!', 'success')
+      navigate('/tickets/mine')
+    } catch (err) {
+      addToast(err.message || 'Failed to submit ticket', 'error')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const inputCls = (key) => `glass-input w-full text-sm ${errors[key] ? 'border-rose-500 text-rose-600 dark:text-rose-400 focus:border-rose-500' : ''}`

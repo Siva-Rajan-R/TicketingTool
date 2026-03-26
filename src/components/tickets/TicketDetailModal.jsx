@@ -24,44 +24,55 @@ export function TicketDetailModal({ ticket, onClose }) {
   const { addToast } = useUiStore()
 
   const [edits, setEdits] = useState({
-    status: ticket.status,
+    status:   ticket.status,
     priority: ticket.priority,
-    assignee: ticket.assignee || 'unassigned',
+    assignee: ticket.assignee || '',
   })
   const [comment, setComment] = useState('')
+  const [saving, setSaving] = useState(false)
 
-  const assignableAgents = agents.filter(a => a.id !== 'unassigned' || true)
-
-  const handleSave = () => {
+  const handleSave = async () => {
     const changes = {}
-    if (edits.status   !== ticket.status)   { changes.status   = edits.status;   addTimelineEvent(ticket.id, { type: 'status', text: `Status changed to <strong>${edits.status}</strong>` }) }
-    if (edits.priority !== ticket.priority) { changes.priority = edits.priority }
-    if (edits.assignee !== ticket.assignee) {
-      changes.assignee = edits.assignee
-      const name = getAgentName(edits.assignee)
-      addTimelineEvent(ticket.id, { type: 'assign', text: `Assigned to <strong>${name}</strong>` })
+    if (edits.status   !== ticket.status)   changes.status   = edits.status
+    if (edits.priority !== ticket.priority) changes.priority = edits.priority
+    if (edits.assignee !== (ticket.assignee || '')) changes.assignee = edits.assignee || null
+
+    if (Object.keys(changes).length === 0) {
+      addToast('No changes to save', 'info')
+      return
     }
-    if (Object.keys(changes).length > 0) {
-      updateTicket(ticket.id, changes)
+    setSaving(true)
+    try {
+      await updateTicket(ticket._uuid, changes)
       addToast('Ticket updated successfully', 'success')
       onClose()
-    } else {
-      addToast('No changes to save', 'info')
+    } catch (e) {
+      addToast(e.message || 'Failed to update ticket', 'error')
+    } finally {
+      setSaving(false)
     }
   }
 
-  const handleComment = () => {
+  const handleComment = async () => {
     if (!comment.trim()) return
-    addTimelineEvent(ticket.id, { type: 'comment', text: comment, author: currentUser?.name || 'Agent' })
-    setComment('')
-    addToast('Comment added', 'success')
+    try {
+      await addTimelineEvent(ticket._uuid, { text: comment })
+      setComment('')
+      addToast('Comment added', 'success')
+    } catch (e) {
+      addToast(e.message || 'Failed to add comment', 'error')
+    }
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (window.confirm('Delete this ticket? This cannot be undone.')) {
-      deleteTicket(ticket.id)
-      addToast('Ticket deleted', 'error')
-      onClose()
+      try {
+        await deleteTicket(ticket._uuid)
+        addToast('Ticket deleted', 'error')
+        onClose()
+      } catch (e) {
+        addToast(e.message || 'Failed to delete ticket', 'error')
+      }
     }
   }
 
@@ -100,7 +111,8 @@ export function TicketDetailModal({ ticket, onClose }) {
             <div>
               <label className="block text-[10px] font-bold t-sub uppercase tracking-wider mb-1">Assignee</label>
               <select className={selectCls} value={edits.assignee} onChange={e => setEdits(x => ({ ...x, assignee: e.target.value }))}>
-                {assignableAgents.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                <option value="">— Unassigned —</option>
+                {agents.map(a => <option key={String(a.id)} value={String(a.id)}>{a.name}</option>)}
               </select>
             </div>
           </div>
@@ -171,8 +183,8 @@ export function TicketDetailModal({ ticket, onClose }) {
           ))}
 
           <div className="pt-4 border-t border-glass space-y-2">
-            <Button variant="primary" size="sm" className="w-full" onClick={handleSave}>
-              <Save size={13} /> Save Changes
+            <Button variant="primary" size="sm" className="w-full" onClick={handleSave} disabled={saving}>
+              <Save size={13} /> {saving ? 'Saving…' : 'Save Changes'}
             </Button>
             <Button variant="danger" size="sm" className="w-full" onClick={handleDelete}>
               <Trash2 size={13} /> Delete Ticket

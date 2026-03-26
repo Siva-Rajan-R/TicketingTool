@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import { useTicketStore } from '../stores/ticketStore'
 import { useUserStore } from '../stores/userStore'
 import { PriorityBadge, StatusBadge } from '../components/ui/Badge'
@@ -7,22 +7,19 @@ import { TicketDetailModal } from '../components/tickets/TicketDetailModal'
 import { categoryLabel, timeAgo } from '../utils/ticketUtils'
 
 export default function MyTickets() {
-  const { tickets } = useTicketStore()
+  const { tickets, loading } = useTicketStore()
   const { currentUser } = useUserStore()
   const [selectedTicket, setSelectedTicket] = useState(null)
 
-  const myTickets = useMemo(() =>
-    [...tickets]
-      .filter(t => t.assignee === currentUser?.id || t.submitter === currentUser?.name)
-      .sort((a, b) => new Date(b.created) - new Date(a.created)),
-    [tickets, currentUser]
-  )
+  const myTickets = [...tickets]
+    .filter(t => t.assignee === String(currentUser?.id))
+    .sort((a, b) => new Date(b.updated) - new Date(a.updated))
 
   return (
     <div className="space-y-4 animate-fade-in">
       <div>
         <h1 className="text-xl font-bold t-main">My Tickets</h1>
-        <p className="text-sm t-muted mt-0.5">{myTickets.length} tickets assigned to or submitted by you</p>
+        <p className="text-sm t-muted mt-0.5">{myTickets.length} tickets assigned to you</p>
       </div>
 
       <Card className="p-0 overflow-hidden">
@@ -36,10 +33,12 @@ export default function MyTickets() {
               </tr>
             </thead>
             <tbody>
-              {myTickets.length === 0 ? (
-                <tr><td colSpan={6} className="py-12 text-center t-muted">No tickets found for your account</td></tr>
+              {loading ? (
+                <tr><td colSpan={6} className="py-12 text-center t-muted">Loading…</td></tr>
+              ) : myTickets.length === 0 ? (
+                <tr><td colSpan={6} className="py-12 text-center t-muted">No tickets assigned to you</td></tr>
               ) : myTickets.map(ticket => (
-                <tr key={ticket.id}
+                <tr key={ticket._uuid}
                   onClick={() => setSelectedTicket(ticket)}
                   className="border-b border-glass hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer transition-all group">
                   <td className="py-3 px-4 font-mono text-[11px] t-sub">{ticket.id}</td>

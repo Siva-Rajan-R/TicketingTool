@@ -15,7 +15,7 @@ const CHART_COLORS = {
 }
 
 export default function Dashboard() {
-  const { tickets } = useTicketStore()
+  const { tickets, loading } = useTicketStore()
   const { getAgentName } = useAdminStore()
   const navigate = useNavigate()
 
@@ -79,12 +79,12 @@ export default function Dashboard() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        <StatsCard label="Open Tickets"   value={stats.open}       icon={Ticket}        color="indigo" />
-        <StatsCard label="In Progress"    value={stats.inProgress} icon={Clock}         color="violet" />
-        <StatsCard label="Resolved"       value={stats.resolved}   icon={CheckCircle}   color="emerald" />
-        <StatsCard label="Critical"       value={stats.critical}   icon={AlertTriangle} color="rose" />
-        <StatsCard label="Total Tickets"  value={stats.total}      icon={Activity}      color="cyan" />
-        <StatsCard label="Avg Response"   value="2.4h"             icon={TrendingUp}    color="amber" />
+        <StatsCard label="Open Tickets"   value={loading ? '…' : stats.open}       icon={Ticket}        color="indigo" />
+        <StatsCard label="In Progress"    value={loading ? '…' : stats.inProgress} icon={Clock}         color="violet" />
+        <StatsCard label="Resolved"       value={loading ? '…' : stats.resolved}   icon={CheckCircle}   color="emerald" />
+        <StatsCard label="Critical"       value={loading ? '…' : stats.critical}   icon={AlertTriangle} color="rose" />
+        <StatsCard label="Total Tickets"  value={loading ? '…' : stats.total}      icon={Activity}      color="cyan" />
+        <StatsCard label="Total Tickets"  value={loading ? '…' : stats.total}      icon={TrendingUp}    color="amber" />
       </div>
 
       {/* Charts row */}
@@ -127,8 +127,10 @@ export default function Dashboard() {
             <CardHeader title="Recent Tickets" subtitle="Latest submissions"
               action={<button onClick={() => navigate('/tickets')} className="text-xs text-indigo-500 hover:text-indigo-400 font-medium transition-colors">View all →</button>} />
             <div className="space-y-2">
-              {recent.map(ticket => (
-                <div key={ticket.id}
+              {loading ? (
+                <div className="py-6 text-center text-sm t-sub">Loading…</div>
+              ) : recent.map(ticket => (
+                <div key={ticket._uuid}
                   onClick={() => navigate('/tickets')}
                   className="flex items-center gap-3 p-3 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer transition-all group border border-transparent hover:border-indigo-500/20">
                   <div className="flex-1 min-w-0">

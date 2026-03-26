@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field
 
 from app.models.ticket import TicketCategory, TicketPriority, TicketStatus, TimelineType
 from app.schemas.user import UserPublic
