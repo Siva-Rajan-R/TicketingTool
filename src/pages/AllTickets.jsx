@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react'
-import { Search, Filter, Download, Trash2, CheckSquare, Square, ChevronUp, ChevronDown, X } from 'lucide-react'
+import { useState } from 'react'
+import { Search, Download, Trash2, CheckSquare, Square, X } from 'lucide-react'
 import { useTicketStore } from '../stores/ticketStore'
 import { useAdminStore } from '../stores/adminStore'
 import { useUiStore } from '../stores/uiStore'
@@ -10,24 +10,45 @@ import { TicketDetailModal } from '../components/tickets/TicketDetailModal'
 import { STATUSES, PRIORITIES, CATEGORIES, categoryLabel, timeAgo } from '../utils/ticketUtils'
 
 export default function AllTickets() {
-  const { tickets, filters, setFilter, resetFilters, selectedIds, toggleSelect, selectAll, clearSelection, bulkUpdate, bulkDelete, getFilteredTickets } = useTicketStore()
+  const { tickets, loading, filters, setFilter, resetFilters, selectedIds, toggleSelect, selectAll, clearSelection, bulkUpdate, bulkDelete, getFilteredTickets } = useTicketStore()
   const { getAgentName } = useAdminStore()
   const { addToast } = useUiStore()
   const [selectedTicket, setSelectedTicket] = useState(null)
 
   const filtered = getFilteredTickets()
-  const allSelected = filtered.length > 0 && filtered.every(t => selectedIds.includes(t.id))
+  const allSelected = filtered.length > 0 && filtered.every(t => selectedIds.includes(t._uuid))
 
   const handleSelectAll = () => {
     if (allSelected) clearSelection()
-    else selectAll(filtered.map(t => t.id))
+    else selectAll(filtered.map(t => t._uuid))
   }
 
-  const handleBulkResolve = () => { bulkUpdate(selectedIds, { status: 'resolved' }); addToast(`${selectedIds.length} tickets resolved`, 'success') }
-  const handleBulkClose   = () => { bulkUpdate(selectedIds, { status: 'closed' });   addToast(`${selectedIds.length} tickets closed`, 'info') }
-  const handleBulkDelete  = () => {
+  const handleBulkResolve = async () => {
+    try {
+      await bulkUpdate(selectedIds, { status: 'resolved' })
+      addToast(`${selectedIds.length} tickets resolved`, 'success')
+    } catch (e) {
+      addToast(e.message, 'error')
+    }
+  }
+
+  const handleBulkClose = async () => {
+    try {
+      await bulkUpdate(selectedIds, { status: 'closed' })
+      addToast(`${selectedIds.length} tickets closed`, 'info')
+    } catch (e) {
+      addToast(e.message, 'error')
+    }
+  }
+
+  const handleBulkDelete = async () => {
     if (window.confirm(`Delete ${selectedIds.length} tickets?`)) {
-      bulkDelete(selectedIds); addToast(`${selectedIds.length} tickets deleted`, 'error')
+      try {
+        await bulkDelete(selectedIds)
+        addToast(`${selectedIds.length} tickets deleted`, 'error')
+      } catch (e) {
+        addToast(e.message, 'error')
+      }
     }
   }
 
@@ -118,14 +139,16 @@ export default function AllTickets() {
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 ? (
+              {loading ? (
+                <tr><td colSpan={8} className="py-12 text-center t-sub text-sm">Loading…</td></tr>
+              ) : filtered.length === 0 ? (
                 <tr><td colSpan={8} className="py-12 text-center t-sub text-sm">No tickets found</td></tr>
               ) : filtered.map(ticket => (
-                <tr key={ticket.id}
+                <tr key={ticket._uuid}
                   onClick={() => setSelectedTicket(ticket)}
-                  className={`border-b border-glass hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer transition-all group ${selectedIds.includes(ticket.id) ? 'bg-indigo-500/10 dark:bg-indigo-500/8' : ''}`}>
-                  <td className="py-3 pl-4 pr-2" onClick={e => { e.stopPropagation(); toggleSelect(ticket.id) }}>
-                    {selectedIds.includes(ticket.id)
+                  className={`border-b border-glass hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer transition-all group ${selectedIds.includes(ticket._uuid) ? 'bg-indigo-500/10 dark:bg-indigo-500/8' : ''}`}>
+                  <td className="py-3 pl-4 pr-2" onClick={e => { e.stopPropagation(); toggleSelect(ticket._uuid) }}>
+                    {selectedIds.includes(ticket._uuid)
                       ? <CheckSquare size={14} className="text-indigo-500" />
                       : <Square size={14} className="t-sub opacity-50 hover:opacity-100" />}
                   </td>

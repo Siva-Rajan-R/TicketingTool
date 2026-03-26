@@ -1,29 +1,31 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { useAdminStore } from './adminStore'
+import { api } from '../api/client'
 
 export const useUserStore = create(
   persist(
     (set) => ({
       currentUser: null,
+      token: null,
       isLoggedIn: false,
 
-      login: (username, password) => {
-        const agents = useAdminStore.getState().agents
-        const user = agents.find(
-          a => a.username && a.username === username && a.password === password
-        )
-        if (user) {
-          set({ currentUser: user, isLoggedIn: true })
+      login: async (username, password) => {
+        try {
+          const data = await api.post('/auth/login', { username, password })
+          set({ currentUser: data.user, token: data.access_token, isLoggedIn: true })
           return { success: true }
+        } catch (e) {
+          return { success: false, error: e.message }
         }
-        return { success: false, error: 'Invalid username or password' }
       },
 
       logout: () => {
-        set({ currentUser: null, isLoggedIn: false })
+        set({ currentUser: null, token: null, isLoggedIn: false })
       },
     }),
-    { name: 'helpdesk-user' }
+    {
+      name: 'helpdesk-user',
+      partialize: (s) => ({ token: s.token, currentUser: s.currentUser, isLoggedIn: s.isLoggedIn }),
+    }
   )
 )

@@ -1,72 +1,27 @@
-import { useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
-  LineChart, Line, CartesianGrid, RadialBarChart, RadialBar, Legend
+  LineChart, Line, CartesianGrid
 } from 'recharts'
-import { useTicketStore } from '../stores/ticketStore'
 import { useAdminStore } from '../stores/adminStore'
 import { Card, CardHeader } from '../components/ui/Card'
 import { categoryLabel } from '../utils/ticketUtils'
+import { api } from '../api/client'
 
 const STATUS_FILL = { open:'#3b82f6','in-progress':'#a855f7','on-hold':'#f59e0b',resolved:'#10b981',closed:'#64748b' }
+const slaColors = { critical: '#ef4444', high: '#f97316', medium: '#f59e0b', low: '#64748b' }
 
 export default function Analytics() {
-  const { tickets } = useTicketStore()
-  const { slaSettings, agents } = useAdminStore()
+  const { slaSettings } = useAdminStore()
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
 
-  const statusData = useMemo(() => {
-    const counts = {}
-    tickets.forEach(t => { counts[t.status] = (counts[t.status] || 0) + 1 })
-    return Object.entries(counts).map(([s, count]) => ({
-      name: s.split('-').map(w => w[0].toUpperCase() + w.slice(1)).join(' '),
-      count, fill: STATUS_FILL[s] || '#6366f1'
-    }))
-  }, [tickets])
-
-  const categoryData = useMemo(() => {
-    const counts = {}
-    tickets.forEach(t => { counts[t.category] = (counts[t.category] || 0) + 1 })
-    return Object.entries(counts)
-      .map(([cat, count]) => ({ name: categoryLabel(cat), count }))
-      .sort((a, b) => b.count - a.count)
-  }, [tickets])
-
-  const resolutionRate = useMemo(() => {
-    const resolved = tickets.filter(t => ['resolved', 'closed'].includes(t.status)).length
-    return tickets.length ? Math.round((resolved / tickets.length) * 100) : 0
-  }, [tickets])
-
-  const priorityData = useMemo(() =>
-    ['critical', 'high', 'medium', 'low'].map(p => ({
-      name: p.charAt(0).toUpperCase() + p.slice(1),
-      total: tickets.filter(t => t.priority === p).length,
-      resolved: tickets.filter(t => t.priority === p && ['resolved', 'closed'].includes(t.status)).length,
-    })),
-    [tickets]
-  )
-
-  const slaData = useMemo(() => {
-    return ['critical', 'high', 'medium', 'low'].map(p => {
-      const pTickets = tickets.filter(t => t.priority === p && t.status === 'resolved')
-      const slaMins = (slaSettings[p] || 4) * 60
-      const compliant = pTickets.filter(t => {
-        const diffMins = (new Date(t.updated) - new Date(t.created)) / 60000
-        return diffMins <= slaMins
-      }).length
-      const rate = pTickets.length ? Math.round((compliant / pTickets.length) * 100) : 100
-      return { priority: p.charAt(0).toUpperCase() + p.slice(1), rate, compliant, total: pTickets.length }
-    })
-  }, [tickets, slaSettings])
-
-  const volumeData = useMemo(() => {
-    const buckets = {}
-    tickets.forEach(t => {
-      const d = new Date(t.created)
-      const key = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-      buckets[key] = (buckets[key] || 0) + 1
-    })
-    return Object.entries(buckets).slice(-10).map(([date, count]) => ({ date, count }))
-  }, [tickets])
+  useEffect(() => {
+    api.get('/analytics')
+      .then(setData)
+      .catch(e => console.error('analytics error', e))
+      .finally(() => setLoading(false))
+  }, [])
 
   const CustomTooltip = ({ active, payload, label }) => {
     if (!active || !payload?.length) return null
@@ -80,13 +35,67 @@ export default function Analytics() {
     )
   }
 
-  const slaColors = { critical: '#ef4444', high: '#f97316', medium: '#f59e0b', low: '#64748b' }
+  if (loading) {
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <div>
+          <h1 className="text-xl font-bold t-main">Analytics</h1>
+          <p className="text-sm t-muted mt-0.5">Loading metrics…</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!data) {
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <div>
+          <h1 className="text-xl font-bold t-main">Analytics</h1>
+          <p className="text-sm t-muted mt-0.5">Failed to load analytics data.</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Prepare chart data from API response
+  const statusData = Object.entries(data.status_distribution || {}).map(([s, count]) => ({
+    name: s.split('-').map(w => w[0].toUpperCase() + w.slice(1)).join(' '),
+    count,
+    fill: STATUS_FILL[s] || '#6366f1',
+  }))
+
+  const categoryData = Object.entries(data.category_distribution || {})
+    .map(([cat, count]) => ({ name: categoryLabel(cat), count }))
+    .sort((a, b) => b.count - a.count)
+
+  const volumeData = (data.tickets_over_time || []).map(row => ({
+    date: new Date(row.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    count: row.count,
+  }))
+
+  const priorityData = ['critical', 'high', 'medium', 'low'].map(p => ({
+    name: p.charAt(0).toUpperCase() + p.slice(1),
+    total: data.priority_distribution?.[p] || 0,
+    resolved: 0,  // backend doesn't split this; shown as total only
+  }))
+
+  const slaData = ['critical', 'high', 'medium', 'low'].map(p => ({
+    priority: p.charAt(0).toUpperCase() + p.slice(1),
+    rate: data.sla_compliance?.[p] ?? 100,
+  }))
+
+  const resolutionRate = data.resolution_rate || 0
+  const totalResolved = (data.status_distribution?.resolved || 0) + (data.status_distribution?.closed || 0)
+  const totalTickets = Object.values(data.status_distribution || {}).reduce((a, b) => a + b, 0)
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-xl font-bold t-main">Analytics</h1>
-        <p className="text-sm t-muted mt-0.5">Performance metrics and insights</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold t-main">Analytics</h1>
+          <p className="text-sm t-muted mt-0.5">Performance metrics and insights</p>
+        </div>
+        <div className="text-xs t-sub">Avg resolution: <span className="font-bold t-main">{data.avg_resolution_hours}h</span></div>
       </div>
 
       {/* Top row */}
@@ -132,7 +141,7 @@ export default function Analytics() {
               </div>
             </div>
             <p className="text-xs t-muted mt-3 text-center">
-              {tickets.filter(t => ['resolved','closed'].includes(t.status)).length} of {tickets.length} tickets resolved
+              {totalResolved} of {totalTickets} tickets resolved
             </p>
           </div>
         </Card>
@@ -142,7 +151,7 @@ export default function Analytics() {
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         {/* Volume trend */}
         <Card>
-          <CardHeader title="Ticket Volume" subtitle="Tickets created over time" />
+          <CardHeader title="Ticket Volume" subtitle="Tickets created over last 30 days" />
           <ResponsiveContainer width="100%" height={180}>
             <LineChart data={volumeData} margin={{ left: -20 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--c-chart-grid)" />
@@ -195,7 +204,6 @@ export default function Analytics() {
                     <span className="text-sm font-bold t-main">{item.rate}%</span>
                   </div>
                 </div>
-                <div className="text-[10px] t-sub">{item.compliant}/{item.total} tickets</div>
                 <div className="text-[10px] t-sub opacity-50 mt-0.5">≤ {slaSettings[item.priority.toLowerCase()]}h target</div>
               </div>
             )
@@ -210,22 +218,20 @@ export default function Analytics() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-glass">
-                {['Priority', 'Total', 'Resolved', 'Open', 'Resolution Rate'].map(h => (
+                {['Priority', 'Total', 'SLA Compliance'].map(h => (
                   <th key={h} className="py-3 px-4 text-left text-[10px] font-bold t-sub uppercase tracking-wider whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {priorityData.map(row => {
-                const open = row.total - row.resolved
-                const rate = row.total ? Math.round((row.resolved / row.total) * 100) : 0
+                const slaRow = slaData.find(s => s.priority === row.name)
+                const rate = slaRow?.rate ?? 100
                 const colors = { Critical: 'text-rose-400', High: 'text-orange-400', Medium: 'text-amber-400', Low: 'text-slate-400' }
                 return (
                   <tr key={row.name} className="border-b border-glass hover:bg-black/5 dark:hover:bg-white/3 transition-all">
                     <td className={`py-3 px-4 text-sm font-bold ${colors[row.name] || 't-main'}`}>{row.name}</td>
                     <td className="py-3 px-4 t-muted">{row.total}</td>
-                    <td className="py-3 px-4 text-emerald-500">{row.resolved}</td>
-                    <td className="py-3 px-4 text-blue-500">{open}</td>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
                         <div className="flex-1 h-1.5 rounded-full bg-black/5 dark:bg-white/8 overflow-hidden max-w-20">

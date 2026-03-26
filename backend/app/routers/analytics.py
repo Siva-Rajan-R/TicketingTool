@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import func, select
+from sqlalchemy import func, literal_column, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
@@ -92,15 +92,16 @@ async def get_analytics(
         sla_compliance[p.value] = round(within / total_p * 100, 1)
 
     # Tickets over time (last 30 days, grouped by day)
+    # Use literal_column("'day'") so the unit is embedded as a SQL literal,
+    # not a bind parameter — otherwise PostgreSQL rejects the GROUP BY because
+    # it sees different parameter slots ($1 vs $3) as different expressions.
     thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
+    day_trunc = func.date_trunc(literal_column("'day'"), Ticket.created_at).label("day")
     daily_res = await db.execute(
-        select(
-            func.date_trunc("day", Ticket.created_at).label("day"),
-            func.count().label("count"),
-        )
+        select(day_trunc, func.count().label("count"))
         .where(Ticket.created_at >= thirty_days_ago)
-        .group_by(func.date_trunc("day", Ticket.created_at))
-        .order_by(func.date_trunc("day", Ticket.created_at))
+        .group_by(day_trunc)
+        .order_by(day_trunc)
     )
     tickets_over_time = [
         {"date": row.day.strftime("%Y-%m-%d"), "count": row.count}

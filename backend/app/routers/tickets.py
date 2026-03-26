@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select, or_, update, delete
+from sqlalchemy.dialects.postgresql import array as pg_array
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -96,10 +97,9 @@ def _apply_sort(stmt, sort: str):
     if sort == "oldest":
         return stmt.order_by(Ticket.created_at.asc())
     elif sort == "priority":
-        priority_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
         return stmt.order_by(
             func.array_position(
-                ["critical", "high", "medium", "low"],
+                pg_array(["critical", "high", "medium", "low"]),
                 Ticket.priority.cast("text"),
             )
         )
@@ -348,7 +348,7 @@ async def update_ticket(
             )
             db.add(resolve_entry)
 
-    if "assignee_id" in update_data and update_data["assignee_id"] != str(old_assignee_id):
+    if "assignee_id" in update_data and update_data["assignee_id"] != old_assignee_id:
         new_assignee_id = update_data["assignee_id"]
         assign_entry = TicketTimeline(
             ticket_id=ticket.id,
@@ -358,7 +358,7 @@ async def update_ticket(
         )
         db.add(assign_entry)
 
-        if new_assignee_id and new_assignee_id != str(current_user.id):
+        if new_assignee_id and new_assignee_id != current_user.id:
             assignee_res = await db.execute(select(User).where(User.id == new_assignee_id))
             assignee = assignee_res.scalar_one_or_none()
             if assignee:

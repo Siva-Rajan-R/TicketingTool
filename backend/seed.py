@@ -27,8 +27,8 @@ from app.models.user import User, UserRole
 # ── Seed data ──────────────────────────────────────────────────────────────
 
 DEFAULT_AGENTS = [
-    {"name": "Sarah Chen",   "initials": "SC", "group": "Security",     "username": "sarah",  "password": "sarah123",  "role": UserRole.technician},
-    {"name": "Marcus Webb",  "initials": "MW", "group": "Network",      "username": "marcus", "password": "marcus123", "role": UserRole.technician},
+    {"name": "Sarah Chen",   "initials": "SC", "group": "Security",     "username": "siva",  "password": "siva",  "role": UserRole.technician},
+    {"name": "Marcus Webb",  "initials": "MW", "group": "Network",      "username": "marcus", "password": "marc", "role": UserRole.technician},
     {"name": "Priya Nair",   "initials": "PN", "group": "L1 Support",   "username": "priya",  "password": "priya123",  "role": UserRole.technician},
     {"name": "Tom Bradley",  "initials": "TB", "group": "Application",  "username": "tom",    "password": "tom123",    "role": UserRole.technician},
     {"name": "John Doe",     "initials": "JD", "group": "IT Admin",     "username": "admin",  "password": "admin",     "role": UserRole.admin},
@@ -96,9 +96,14 @@ async def seed():
 
         await db.flush()
 
-        # Assign agents to tickets in rotation
-        agent_list = [agents["sarah"], agents["marcus"], agents["priya"], agents["tom"]]
-        admin_user = agents["admin"]
+        # Assign agents to tickets in rotation (all non-admin users)
+        agent_list = [
+            agents[d["username"]]
+            for d in DEFAULT_AGENTS
+            if d["role"] == UserRole.technician
+        ]
+        admin_username = next(d["username"] for d in DEFAULT_AGENTS if d["role"] == UserRole.admin)
+        admin_user = agents[admin_username]
 
         for idx, t_data in enumerate(SEED_TICKETS):
             assignee = agent_list[idx % len(agent_list)]
@@ -156,10 +161,10 @@ async def seed():
                 ))
 
         await db.commit()
-        print(f"✓ Created {len(DEFAULT_AGENTS)} agents")
-        print(f"✓ Created {len(SEED_TICKETS)} sample tickets")
-        print("✓ SLA config created")
-        print("✓ Email config created")
+        print(f"[OK] Created {len(DEFAULT_AGENTS)} agents")
+        print(f"[OK] Created {len(SEED_TICKETS)} sample tickets")
+        print("[OK] SLA config created")
+        print("[OK] Email config created")
         print("Seeding complete!")
 
 

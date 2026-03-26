@@ -1,47 +1,93 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
-import { DEFAULT_AGENTS, DEFAULT_SLA, DEFAULT_EMAIL_CONFIG, DEFAULT_EMAIL_TRIGGERS } from '../data/seedData'
+import { api } from '../api/client'
 
-export const useAdminStore = create(
-  persist(
-    (set, get) => ({
-      agents: DEFAULT_AGENTS,
-      slaSettings: DEFAULT_SLA,
-      emailConfig: DEFAULT_EMAIL_CONFIG,
-      emailTriggers: DEFAULT_EMAIL_TRIGGERS,
+export const useAdminStore = create((set, get) => ({
+  agents: [],
+  slaSettings: { critical: 1, high: 4, medium: 8, low: 24 },
+  emailConfig: { type: 'smtp', smtp: {}, trigger_new: true, trigger_assign: true, trigger_resolve: true },
+  loading: false,
 
-      addAgent: (agent) => {
-        const id = 'agent-' + Date.now()
-        const initials = agent.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
-        set(s => ({
-          agents: [...s.agents.filter(a => a.id !== 'unassigned'), { ...agent, id, initials }, s.agents.find(a => a.id === 'unassigned')].filter(Boolean)
-        }))
+  fetchAgents: async () => {
+    try {
+      const data = await api.get('/agents')
+      set({ agents: data })
+    } catch (e) {
+      console.error('fetchAgents error', e)
+    }
+  },
+
+  fetchSla: async () => {
+    try {
+      const data = await api.get('/admin/sla')
+      set({
+        slaSettings: {
+          critical: data.critical_hours,
+          high:     data.high_hours,
+          medium:   data.medium_hours,
+          low:      data.low_hours,
+        },
+      })
+    } catch (e) {
+      console.error('fetchSla error', e)
+    }
+  },
+
+  fetchEmailConfig: async () => {
+    try {
+      const data = await api.get('/admin/email')
+      set({ emailConfig: data })
+    } catch (e) {
+      console.error('fetchEmailConfig error', e)
+    }
+  },
+
+  addAgent: async (agentData) => {
+    const initials = agentData.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
+    const body = {
+      name:      agentData.name,
+      initials,
+      group:     agentData.group,
+      username:  agentData.username,
+      password:  agentData.password,
+      role:      agentData.role || 'technician',
+    }
+    const data = await api.post('/agents', body)
+    set(s => ({ agents: [...s.agents, data] }))
+    return data
+  },
+
+  deleteAgent: async (id) => {
+    await api.delete(`/agents/${id}`)
+    set(s => ({ agents: s.agents.filter(a => String(a.id) !== String(id)) }))
+  },
+
+  updateSla: async (slaValues) => {
+    const body = {
+      critical_hours: Number(slaValues.critical),
+      high_hours:     Number(slaValues.high),
+      medium_hours:   Number(slaValues.medium),
+      low_hours:      Number(slaValues.low),
+    }
+    const data = await api.put('/admin/sla', body)
+    set({
+      slaSettings: {
+        critical: data.critical_hours,
+        high:     data.high_hours,
+        medium:   data.medium_hours,
+        low:      data.low_hours,
       },
+    })
+  },
 
-      deleteAgent: (id) => {
-        set(s => ({ agents: s.agents.filter(a => a.id !== id) }))
-      },
+  updateEmailConfig: async (payload) => {
+    const data = await api.put('/admin/email', payload)
+    set({ emailConfig: data })
+  },
 
-      updateSla: (priority, hours) => {
-        set(s => ({ slaSettings: { ...s.slaSettings, [priority]: Number(hours) } }))
-      },
-
-      updateEmailConfig: (changes) => {
-        set(s => ({ emailConfig: { ...s.emailConfig, ...changes } }))
-      },
-
-      updateEmailTriggers: (changes) => {
-        set(s => ({ emailTriggers: { ...s.emailTriggers, ...changes } }))
-      },
-
-      resetAgents: () => set({ agents: DEFAULT_AGENTS }),
-
-      getAgentById: (id) => get().agents.find(a => a.id === id),
-      getAgentName: (id) => {
-        const a = get().agents.find(ag => ag.id === id)
-        return a ? a.name : '—'
-      },
-    }),
-    { name: 'helpdesk-admin' }
-  )
-)
+  getAgentById: (id) => get().agents.find(a => String(a.id) === String(id)),
+  getAgentName: (id) => {
+    if (!id) return '—'
+    const a = get().agents.find(ag => String(ag.id) === String(id))
+    return a ? a.name : '—'
+  },
+}))
