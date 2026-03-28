@@ -6,13 +6,12 @@ import {
 import { useTicketStore } from '../stores/ticketStore'
 import { useAdminStore } from '../stores/adminStore'
 import { Card, CardHeader } from '../components/ui/Card'
-import { categoryLabel } from '../utils/ticketUtils'
 
 const STATUS_FILL = { open:'#3b82f6','in-progress':'#a855f7','on-hold':'#f59e0b',resolved:'#10b981',closed:'#64748b' }
 
 export default function Analytics() {
   const { tickets } = useTicketStore()
-  const { slaSettings, agents } = useAdminStore()
+  const { slaSettings, agents, getCategoryName } = useAdminStore()
 
   const statusData = useMemo(() => {
     const counts = {}
@@ -27,9 +26,9 @@ export default function Analytics() {
     const counts = {}
     tickets.forEach(t => { counts[t.category] = (counts[t.category] || 0) + 1 })
     return Object.entries(counts)
-      .map(([cat, count]) => ({ name: categoryLabel(cat), count }))
+      .map(([cat, count]) => ({ name: getCategoryName(cat), count }))
       .sort((a, b) => b.count - a.count)
-  }, [tickets])
+  }, [tickets, getCategoryName])
 
   const resolutionRate = useMemo(() => {
     const resolved = tickets.filter(t => ['resolved', 'closed'].includes(t.status)).length

@@ -2,20 +2,22 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { SEED_TICKETS } from '../data/seedData'
 import { genId } from '../utils/ticketUtils'
+import { useAdminStore } from './adminStore'
 
 export const useTicketStore = create(
   persist(
     (set, get) => ({
       tickets: SEED_TICKETS,
-      filters: { status: '', priority: '', category: '', sort: 'newest', search: '' },
+      filters: { status: '', priority: '', category: '', group: '', type: '', sort: 'newest', search: '' },
       selectedIds: [],
 
       addTicket: (data) => {
         const tickets = get().tickets
+        const { numberPrefix, numberDigits } = useAdminStore.getState().ticketSettings
         const now = new Date().toISOString()
         const ticket = {
           ...data,
-          id: genId(tickets),
+          id: genId(tickets, numberPrefix, numberDigits),
           created: now,
           updated: now,
           timeline: [
@@ -48,6 +50,68 @@ export const useTicketStore = create(
         set(state => ({ tickets: state.tickets.filter(t => t.id !== id) }))
       },
 
+      // ── Tasks ──────────────────────────────────────────────────────────
+      addTask: (ticketId, task) => {
+        const id = 'task-' + Date.now()
+        set(s => ({ tickets: s.tickets.map(t => t.id === ticketId
+          ? { ...t, tasks: [...(t.tasks||[]), { ...task, id, done: false, createdAt: new Date().toISOString() }], updated: new Date().toISOString() }
+          : t) }))
+      },
+      toggleTask: (ticketId, taskId) => {
+        set(s => ({ tickets: s.tickets.map(t => t.id === ticketId
+          ? { ...t, tasks: (t.tasks||[]).map(tk => tk.id === taskId ? { ...tk, done: !tk.done } : tk), updated: new Date().toISOString() }
+          : t) }))
+      },
+      deleteTask: (ticketId, taskId) => {
+        set(s => ({ tickets: s.tickets.map(t => t.id === ticketId
+          ? { ...t, tasks: (t.tasks||[]).filter(tk => tk.id !== taskId), updated: new Date().toISOString() }
+          : t) }))
+      },
+
+      // ── Work Log ───────────────────────────────────────────────────────
+      addWorkLog: (ticketId, entry) => {
+        const id = 'wl-' + Date.now()
+        set(s => ({ tickets: s.tickets.map(t => t.id === ticketId
+          ? { ...t, workLog: [...(t.workLog||[]), { ...entry, id, ts: new Date().toISOString() }], updated: new Date().toISOString() }
+          : t) }))
+      },
+      deleteWorkLog: (ticketId, entryId) => {
+        set(s => ({ tickets: s.tickets.map(t => t.id === ticketId
+          ? { ...t, workLog: (t.workLog||[]).filter(w => w.id !== entryId), updated: new Date().toISOString() }
+          : t) }))
+      },
+
+      // ── Reminders ──────────────────────────────────────────────────────
+      addReminder: (ticketId, reminder) => {
+        const id = 'rem-' + Date.now()
+        set(s => ({ tickets: s.tickets.map(t => t.id === ticketId
+          ? { ...t, reminders: [...(t.reminders||[]), { ...reminder, id, done: false }], updated: new Date().toISOString() }
+          : t) }))
+      },
+      toggleReminder: (ticketId, remId) => {
+        set(s => ({ tickets: s.tickets.map(t => t.id === ticketId
+          ? { ...t, reminders: (t.reminders||[]).map(r => r.id === remId ? { ...r, done: !r.done } : r), updated: new Date().toISOString() }
+          : t) }))
+      },
+      deleteReminder: (ticketId, remId) => {
+        set(s => ({ tickets: s.tickets.map(t => t.id === ticketId
+          ? { ...t, reminders: (t.reminders||[]).filter(r => r.id !== remId), updated: new Date().toISOString() }
+          : t) }))
+      },
+
+      // ── Approvals ──────────────────────────────────────────────────────
+      addApproval: (ticketId, approval) => {
+        const id = 'appr-' + Date.now()
+        set(s => ({ tickets: s.tickets.map(t => t.id === ticketId
+          ? { ...t, approvals: [...(t.approvals||[]), { ...approval, id, status: 'pending', ts: new Date().toISOString() }], updated: new Date().toISOString() }
+          : t) }))
+      },
+      updateApprovalStatus: (ticketId, approvalId, status) => {
+        set(s => ({ tickets: s.tickets.map(t => t.id === ticketId
+          ? { ...t, approvals: (t.approvals||[]).map(a => a.id === approvalId ? { ...a, status, resolvedAt: new Date().toISOString() } : a), updated: new Date().toISOString() }
+          : t) }))
+      },
+
       bulkUpdate: (ids, changes) => {
         const now = new Date().toISOString()
         set(state => ({
@@ -70,7 +134,7 @@ export const useTicketStore = create(
       },
 
       resetFilters: () => {
-        set({ filters: { status: '', priority: '', category: '', sort: 'newest', search: '' } })
+        set({ filters: { status: '', priority: '', category: '', group: '', type: '', sort: 'newest', search: '' } })
       },
 
       toggleSelect: (id) => {
@@ -92,6 +156,8 @@ export const useTicketStore = create(
         if (filters.status)   result = result.filter(t => t.status === filters.status)
         if (filters.priority) result = result.filter(t => t.priority === filters.priority)
         if (filters.category) result = result.filter(t => t.category === filters.category)
+        if (filters.group)    result = result.filter(t => t.group === filters.group)
+        if (filters.type)     result = result.filter(t => t.type === filters.type)
         if (filters.search) {
           const q = filters.search.toLowerCase()
           result = result.filter(t =>
