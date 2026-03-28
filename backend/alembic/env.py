@@ -4,6 +4,10 @@ from logging.config import fileConfig
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
+from app.models.admin import SLAConfig,EmailConfig
+from app.models.notification import Notification
+from app.models.ticket import Ticket,TicketTimeline
+from app.models.user import User
 
 from alembic import context
 
